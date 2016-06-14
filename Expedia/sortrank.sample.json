@@ -1,0 +1,73 @@
+﻿{
+    "hotelId": 1,
+    "searchDates": [
+        {
+            "searchDate": "2016-05-15",
+            "tpids": [
+                {
+                    "regions": [
+                        {
+                            "data": [
+                                {
+                                    "avgComp": 95.34,
+                                    "avgPrice": 381.37,
+                                    "avgRank": 272.98,
+                                    "checkinDate": "2016-05-17"
+                                }
+                            ],
+                            "regionId": 2114
+                        },
+                        {
+                            "data": [
+                                {
+                                    "avgComp": 97.66,
+                                    "avgPrice": 390.64,
+                                    "avgRank": 3.0,
+                                    "checkinDate": "2016-05-17"
+                                }
+                            ],
+                            "regionId": 800053
+                        },
+                        {
+                            "data": [],
+                            "regionId": 6144914
+                        }
+                    ],
+                    "tpid": 3101
+                },
+                {
+                    "regions": [
+                        {
+                            "data": [
+                                {
+                                    "avgComp": 97.58,
+                                    "avgPrice": 390.3,
+                                    "avgRank": 387.64,
+                                    "checkinDate": "2016-05-17"
+                                }
+                            ],
+                            "regionId": 2114
+                        }
+                    ],
+                    "tpid": 3107
+                },
+                {
+                    "regions": [
+                        {
+                            "data": [
+                                {
+                                    "avgComp": 93.25,
+                                    "avgPrice": 372.97,
+                                    "avgRank": 276.72,
+                                    "checkinDate": "2016-05-17"
+                                }
+                            ],
+                            "regionId": 2114
+                        }
+                    ],
+                    "tpid": 3109
+                }
+            ]
+        }
+    ]
+}

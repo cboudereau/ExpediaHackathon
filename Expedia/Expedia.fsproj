@@ -58,6 +58,7 @@
     <Content Include="credentials.txt" />
     <None Include="pointofsell.sample.html" />
     <None Include="tpos.sample.json" />
+    <None Include="sortrank.sample.json" />
     <None Include="Clem.fsx" />
   </ItemGroup>
   <ItemGroup>

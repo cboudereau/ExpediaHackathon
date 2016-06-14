@@ -50,5 +50,9 @@ module ConversationCountService =
         ExpediaRest.load (HotelId hotelId) response <| fun (HotelId hotelId) response ->
             (response |> ConversationCountServiceApi.Parse).UnreadCount |> UnreadCount |> Success
 
+module SortRank = 
+    type private SortRankApi = JsonProvider< """sortrank.sample.json""" >
+    let load user password (HotelId hotelId) = ()
+
 TopPointOfSell.load "EQC15240057test" "mVtM7Uq3" (HotelId 15240057)
 ConversationCountService.load "EQC15240057test" "mVtM7Uq3" (HotelId 15240057)
