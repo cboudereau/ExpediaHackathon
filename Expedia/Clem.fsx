@@ -9,6 +9,7 @@ type Result<'t, 'f> =
 type HotelId = HotelId of int
 type TpId = TpId of int
 type PointOfSell = PointOfSell of string
+type Day = Day of int
 
 type ErrorMessage = ErrorMessage of string
 type Error = Error of HotelId * ErrorMessage
@@ -35,7 +36,7 @@ module TopPointOfSell =
             match result.Error with
             | Some error -> Failure (Error (HotelId hotelId, ErrorMessage error))
             | _ -> Success (result.HopsTpidsList |> Array.map(fun h -> TpId h.Tpid, (h.SortedRegionList |> Array.toList |> List.map (int64 >> RegionId))))
-                        
+            
     let tpidMap = PointOfSellMapping.Load("""pointofsell.sample.html""").Tables.``TPID to Point of Sale Mapping``.Rows |> Array.map(fun r -> (TpId r.TPID), (PointOfSell r.``Point of Sale``)) |> Map.ofArray
 
 module ConversationCountService = 
@@ -47,6 +48,18 @@ module ConversationCountService =
         
         ExpediaRest.load (HotelId hotelId) response <| fun (HotelId hotelId) response ->
             (response |> ConversationCountServiceApi.Parse).UnreadCount |> UnreadCount |> Success
+
+module FairShareService = 
+    type FairShareServiceApi = JsonProvider<"""fairShare.sample.json""">
+
+    let load user password (HotelId hotelId) (Day day) = 
+        let response = Http.Request(sprintf "https://services.expediapartnercentral.com/insights/public/v1/fairShare?hotelId=%i&dayNum=%i" hotelId day, headers = [ HttpRequestHeaders.BasicAuth user password ], silentHttpErrors=true)
+
+        ExpediaRest.load (HotelId hotelId) response <| fun (HotelId hotelId) response ->
+            let responseParsed = response|> FairShareServiceApi.Parse 
+            match responseParsed.ErrorCode.JsonValue.AsString(), responseParsed.ErrorMsg.JsonValue.AsString() with
+            | null, null -> responseParsed |> Success
+            | errorCode, errorMsg -> Failure(Error(HotelId hotelId, ErrorMessage(sprintf "%s errorCode: %s" errorCode errorMsg)))
 
 module SortRank = 
     type Price = USD of decimal
@@ -104,5 +117,6 @@ module SortRank =
                 |> Success
 
 SortRank.load "EQC15240057test" "mVtM7Uq3" (HotelId 15240057)
+FairShareService.load "EQC15240057test" "mVtM7Uq3" (HotelId 15240057) (Day 2)
 TopPointOfSell.load "EQC15240057test" "mVtM7Uq3" (HotelId 15240057)
 ConversationCountService.load "EQC15240057test" "mVtM7Uq3" (HotelId 15240057)
