@@ -1,13 +1,10 @@
 ﻿#r """..\packages\FSharp.Data.2.3.0\lib\net40\FSharp.Data.dll"""
 open FSharp.Data
+open System
 
 type Result<'t, 'f> = 
     | Success of 't
     | Failure of 'f
-
-type PointOfSellMapping = HtmlProvider< """pointofsell.sample.html""" >
-
-type PointOfSellApi = JsonProvider< """tpos.sample.json""", SampleIsList=true >
 
 type HotelId = HotelId of int
 type TpId = TpId of int
@@ -16,8 +13,7 @@ type PointOfSell = PointOfSell of string
 type ErrorMessage = ErrorMessage of string
 type Error = Error of HotelId * ErrorMessage
 
-type GaiaId = GaiaId of int64
-type UnreadCount = UnreadCount of int
+type RegionId = RegionId of int64 //Gaia Id
 
 module ExpediaRest = 
     let load (HotelId hotelId) (response:HttpResponse) f =
@@ -27,7 +23,9 @@ module ExpediaRest =
         | statusCode, HttpResponseBody.Text error -> Failure (Error (HotelId hotelId, ErrorMessage (sprintf "error(%i) %s" statusCode error)))
 
 module TopPointOfSell =  
-    type private TopPointOfSell = TopPointOfSell of TpId * (GaiaId list) 
+    type private PointOfSellApi = JsonProvider< """tpos.sample.json""", SampleIsList=true >
+    type private TopPointOfSell = TopPointOfSell of TpId * (RegionId list) 
+    type private PointOfSellMapping = HtmlProvider< """pointofsell.sample.html""" >
 
     let load user password (HotelId hotelId) = 
         let response = Http.Request(sprintf "https://services.expediapartnercentral.com/top-tpids/lodgingSort/v1/hops/HopsTopTpidsAndRegions?hotelId=%i" hotelId, headers = [ HttpRequestHeaders.BasicAuth user password ], silentHttpErrors=true)
@@ -36,12 +34,12 @@ module TopPointOfSell =
             let result = response |> PointOfSellApi.Parse
             match result.Error with
             | Some error -> Failure (Error (HotelId hotelId, ErrorMessage error))
-            | _ -> Success (result.HopsTpidsList |> Array.map(fun h -> TpId h.Tpid, (h.SortedRegionList |> Array.toList |> List.map (int64 >> GaiaId))))
-            
+            | _ -> Success (result.HopsTpidsList |> Array.map(fun h -> TpId h.Tpid, (h.SortedRegionList |> Array.toList |> List.map (int64 >> RegionId))))
                         
     let tpidMap = PointOfSellMapping.Load("""pointofsell.sample.html""").Tables.``TPID to Point of Sale Mapping``.Rows |> Array.map(fun r -> (TpId r.TPID), (PointOfSell r.``Point of Sale``)) |> Map.ofArray
 
 module ConversationCountService = 
+    type UnreadCount = UnreadCount of int
     type private ConversationCountServiceApi = JsonProvider< """{"unreadCount":0}""" >
 
     let load user password (HotelId hotelId) = 
@@ -51,8 +49,60 @@ module ConversationCountService =
             (response |> ConversationCountServiceApi.Parse).UnreadCount |> UnreadCount |> Success
 
 module SortRank = 
-    type private SortRankApi = JsonProvider< """sortrank.sample.json""" >
-    let load user password (HotelId hotelId) = ()
+    type Price = USD of decimal
+    type SearchDate = SearchDate of DateTime
+    type CheckinDate = CheckinDate of DateTime
+    
+    type Stat = 
+        { AverageRank : Price //Average sort rank (for all searches done on the specified search date for the specified checkin date on the specified TPID and region).
+          AveragePrice : Price //Average price is returned in USD.
+          AverageCompensation : Price //Average compensation is returned in USD. TODO : question, because I don't know what it is ?
+          CheckinDate : CheckinDate }
+    
+    type Region = 
+        { RegionId : RegionId
+          Datas : Stat list }
 
+    type SortRank = 
+        { HotelId : HotelId
+          SearchDate : SearchDate
+          Regions : (TpId * Region) list }
+
+    let private parseDate date = DateTime.ParseExact(date, "YYYY-MM-DD", System.Globalization.CultureInfo.InvariantCulture)
+    
+    type private SortRankApi = JsonProvider< """sortrank.sample.json""", SampleIsList=true >
+    
+    let load user password (HotelId hotelId) = 
+        //TODO : use search parameter : ?hotelId=1&searchDate=2016-05-15&checkin=2016-05-16&numDays=1
+        let response = Http.Request(sprintf "https://services.expediapartnercentral.com/sort-ranks/lodgingSort/v1/hops/HopsAverageRanks?hotelId=%i" hotelId, headers = [ HttpRequestHeaders.BasicAuth user password ], silentHttpErrors=true)
+        ExpediaRest.load (HotelId hotelId) response <| fun (HotelId hotelId) response ->
+            let parsed = response |> SortRankApi.Parse
+            
+            let data (d:SortRankApi.Datum) = 
+                { AverageRank = d.AvgRank |> USD
+                  AveragePrice = d.AvgPrice |> USD
+                  AverageCompensation = d.AvgComp |> USD
+                  CheckinDate = CheckinDate d.CheckinDate }
+
+            let tpid (t:SortRankApi.Tpid) = 
+                t.Regions
+                |> Array.map(fun r -> 
+                    t.Tpid |> TpId,
+                    { RegionId = r.RegionId |> int64 |> RegionId
+                      Datas = 
+                        r.Data
+                        |> Array.map data
+                        |> Array.toList })
+            match parsed.Error with
+            | Some error -> Error(HotelId hotelId, ErrorMessage error) |> Failure
+            | None ->
+                parsed.SearchDates
+                |> Array.map (fun sd ->
+                    { HotelId = HotelId hotelId
+                      SearchDate = SearchDate sd.SearchDate
+                      Regions = sd.Tpids |> Array.collect tpid |> Array.toList })
+                |> Success
+
+SortRank.load "EQC15240057test" "mVtM7Uq3" (HotelId 15240057)
 TopPointOfSell.load "EQC15240057test" "mVtM7Uq3" (HotelId 15240057)
 ConversationCountService.load "EQC15240057test" "mVtM7Uq3" (HotelId 15240057)
