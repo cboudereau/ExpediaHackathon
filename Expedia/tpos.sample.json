@@ -1,0 +1,21 @@
+﻿[
+  {
+    "hotelId": 15240057,
+    "hopsTpidsList": [
+      {
+        "tpid": 1,
+        "sortedRegionList": [ 6293341111111111111111111111111111111111111111111111111111111111111111111111, 6023379 ]
+      }
+    ]
+  },
+  {
+    "error": "No hotelId specified"
+  },
+  {
+    "error": "No clientId specified or unknown clientId"
+  },
+  {
+    "error":"No data found",
+    "hotelId":1234567890
+  }
+]
