@@ -260,7 +260,7 @@ let commandParser =
                     let price (tpid, p) = let (USD  pr, CheckinDate cd) = p.AveragePrice,p.CheckinDate in pr, cd, tpid
                     let (minP, minCd, tpid) = datas |> List.minBy(fun (_,d) -> d.AveragePrice) |> price
                     let (PointOfSell pointOfSale) = TopPointOfSell.tpidMap |> Map.find tpid
-                    sprintf "A customer stay in your hotel with your best price $%.2f on %s from %s" minP (dateString minCd) pointOfSale |> post 
+                    sprintf "A customer stay in your hotel with your best price $%.2f on %s from %s point of sell." minP (dateString minCd) pointOfSale |> post 
                 | Failure (Error(_, ErrorMessage em)) -> sprintf "I experienced some problems (%s), one moment please..." em |> post
              
             
