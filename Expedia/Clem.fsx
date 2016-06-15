@@ -1,4 +1,5 @@
 ﻿#r """..\packages\FSharp.Data.2.3.0\lib\net40\FSharp.Data.dll"""
+
 open FSharp.Data
 open System
 
@@ -108,7 +109,7 @@ module SortRank =
     
     type Region = 
         { RegionId : RegionId
-          Datas : Stat list }
+          Datas : Stat list } //datas for all days
 
     type SortRank = 
         { HotelId : HotelId
