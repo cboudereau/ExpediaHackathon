@@ -74,7 +74,7 @@ module SortRank =
     
     type Region = 
         { RegionId : RegionId
-          Datas : Stat list }
+          Datas : Stat list } //datas for all days
 
     type SortRank = 
         { HotelId : HotelId

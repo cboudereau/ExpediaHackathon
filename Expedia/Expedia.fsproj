@@ -55,6 +55,10 @@
   </Choose>
   <Import Project="$(FSharpTargetsPath)" />
   <ItemGroup>
+    <Compile Include="String.fs" />
+    <Compile Include="Slack.fs" />
+    <None Include="rtmStart.sample.json" />
+    <None Include="rtmMessage.sample.json" />
     <Content Include="credentials.txt" />
     <None Include="pointofsell.sample.html" />
     <None Include="tpos.sample.json" />
@@ -64,6 +68,9 @@
     <None Include="fairShare.sample.json" />
   </ItemGroup>
   <ItemGroup>
+    <Reference Include="FSharp.Data">
+      <HintPath>..\..\..\..\..\..\packages\FSharp.Data\lib\net40\FSharp.Data.dll</HintPath>
+    </Reference>
     <Reference Include="mscorlib" />
     <Reference Include="FSharp.Core, Version=$(TargetFSharpCoreVersion), Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
       <Private>True</Private>

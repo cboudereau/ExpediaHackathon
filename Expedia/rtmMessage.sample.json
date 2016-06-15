@@ -1,0 +1,15 @@
+﻿[
+  {
+    "id": 1234,
+    "type": "ping",
+    "reply_to": 1,
+    "time": 1403299273342
+  },
+  {
+    "id": 1,
+    "type": "message",
+    "channel": "C024BE91L",
+    "user": "U023BECGF",
+    "text": "Hello world"
+  }
+]
