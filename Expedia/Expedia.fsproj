@@ -59,6 +59,7 @@
     <None Include="pointofsell.sample.html" />
     <None Include="tpos.sample.json" />
     <None Include="sortrank.sample.json" />
+    <None Include="competitorsetecents.sample.json" />
     <None Include="Clem.fsx" />
     <None Include="fairShare.sample.json" />
   </ItemGroup>
