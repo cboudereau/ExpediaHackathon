@@ -116,6 +116,9 @@ module SortRank =
                       Regions = sd.Tpids |> Array.collect tpid |> Array.toList })
                 |> Success
 
+module CompetitorSetEvents = 
+    type CompetitorSetEventsApi = JsonProvider< """competitorsetecents.sample.json""" >
+
 SortRank.load "EQC15240057test" "mVtM7Uq3" (HotelId 15240057)
 FairShareService.load "EQC15240057test" "mVtM7Uq3" (HotelId 15240057) (Day 2)
 TopPointOfSell.load "EQC15240057test" "mVtM7Uq3" (HotelId 15240057)
