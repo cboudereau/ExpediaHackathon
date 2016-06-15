@@ -116,9 +116,25 @@ module SortRank =
                       Regions = sd.Tpids |> Array.collect tpid |> Array.toList })
                 |> Success
 
-module CompetitorSetEvents = 
-    type CompetitorSetEventsApi = JsonProvider< """competitorsetecents.sample.json""" >
+module CompetitorSetEventsService = 
+    type StartDate = StartDate of DateTime
+    type EndDate = EndDate of DateTime
 
+    let private dateToString (date:DateTime) = date.ToString("yyyy-MM-dd")
+        
+    type CompetitorSetEventsApi = JsonProvider< """competitorsetecents.sample.json""" >
+    
+    let load user password (HotelId hotelId) (StartDate startDate) (EndDate endDate) = 
+        let response = Http.Request(sprintf "https://services.expediapartnercentral.com/insights/public/v1/addCompSet?hotelId=%i&startDate=%s&endDate=%s" hotelId (dateToString startDate) (dateToString endDate), headers = [ HttpRequestHeaders.BasicAuth user password ], silentHttpErrors=true)
+        ExpediaRest.load (HotelId hotelId) response <| fun (HotelId hotelId) response ->
+            let responseParsed = response|> CompetitorSetEventsApi.Parse 
+            match String.IsNullOrEmpty(responseParsed.ErrorCode.JsonValue.AsString()), String.IsNullOrEmpty(responseParsed.ErrorMsg.JsonValue.AsString()) with
+            | true, true -> responseParsed |> Success
+            | errorCode, errorMsg -> Failure(Error(HotelId hotelId, ErrorMessage(sprintf "%s errorCode: %s" (responseParsed.ErrorCode.JsonValue.AsString()) (responseParsed.ErrorMsg.JsonValue.AsString()))))
+        
+
+open CompetitorSetEventsService
+CompetitorSetEventsService.load "EQC15240057test" "mVtM7Uq3" (HotelId 15240057) (StartDate (DateTime(2016,6,1))) (EndDate (DateTime(2016,6,3)))
 SortRank.load "EQC15240057test" "mVtM7Uq3" (HotelId 15240057)
 FairShareService.load "EQC15240057test" "mVtM7Uq3" (HotelId 15240057) (Day 2)
 TopPointOfSell.load "EQC15240057test" "mVtM7Uq3" (HotelId 15240057)
