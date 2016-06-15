@@ -60,6 +60,7 @@
     <None Include="tpos.sample.json" />
     <None Include="sortrank.sample.json" />
     <None Include="Clem.fsx" />
+    <None Include="fairShare.sample.json" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="mscorlib" />
