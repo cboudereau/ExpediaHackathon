@@ -256,10 +256,11 @@ let commandParser =
             | String.Contains "What's my best price today" _ ->
                 match SortRank.load user password hotelId "2016-06-14" with
                 | Success (sortRanks) -> 
-                    let datas = sortRanks |> List.collect (fun h -> h.Regions |> List.collect(fun (tpid, r) -> r.Datas))
-                    let price p = let (USD  pr, CheckinDate cd) = p.AveragePrice,p.CheckinDate in pr, cd
-                    let (minP, minCd) = datas |> List.minBy(fun d -> d.AveragePrice) |> price
-                    sprintf "A customer stay in your hotel with your best price $%.2f on %s" minP (dateString minCd) |> post 
+                    let datas = sortRanks |> List.collect (fun h -> h.Regions |> List.collect(fun (tpid, r) -> r.Datas |> List.map (fun d -> tpid, d)))
+                    let price (tpid, p) = let (USD  pr, CheckinDate cd) = p.AveragePrice,p.CheckinDate in pr, cd, tpid
+                    let (minP, minCd, tpid) = datas |> List.minBy(fun (_,d) -> d.AveragePrice) |> price
+                    let (PointOfSell pointOfSale) = TopPointOfSell.tpidMap |> Map.find tpid
+                    sprintf "A customer stay in your hotel with your best price $%.2f on %s from %s" minP (dateString minCd) pointOfSale |> post 
                 | Failure (Error(_, ErrorMessage em)) -> sprintf "I experienced some problems (%s), one moment please..." em |> post
              
             

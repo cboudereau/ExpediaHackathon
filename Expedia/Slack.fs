@@ -14,7 +14,7 @@ type private SlackUserId = SlackUserId of string
 type private RtmStart = JsonProvider<"rtmStart.sample.json">
 type private RtmMessage = JsonProvider<"rtmMessage.sample.json", SampleIsList=true>
 
-let [<Literal>] private token = "xoxb-51086347636-RywdMKFiqR8Gf7so4EhAsCNg"
+let [<Literal>] private token = "todo"
 
 let post (Channel channel) text = 
         Http.Request(
