@@ -81,13 +81,14 @@ module SortRank =
           SearchDate : SearchDate
           Regions : (TpId * Region) list }
 
-    let private parseDate date = DateTime.ParseExact(date, "YYYY-MM-DD", System.Globalization.CultureInfo.InvariantCulture)
-    
     type private SortRankApi = JsonProvider< """sortrank.sample.json""", SampleIsList=true >
     
-    let load user password (HotelId hotelId) = 
+    let dateString (date:DateTime) = date.ToString("yyyy-MM-dd")
+        
+    let load user password (HotelId hotelId) searchDates = 
         //TODO : use search parameter : ?hotelId=1&searchDate=2016-05-15&checkin=2016-05-16&numDays=1
-        let response = Http.Request(sprintf "https://services.expediapartnercentral.com/sort-ranks/lodgingSort/v1/hops/HopsAverageRanks?hotelId=%i" hotelId, headers = [ HttpRequestHeaders.BasicAuth user password ], silentHttpErrors=true)
+        let searchDatesP = String.Join(",",searchDates |> List.map (fun (SearchDate d) -> dateString d) |> List.toArray)
+        let response = Http.Request(sprintf "https://services.expediapartnercentral.com/sort-ranks/lodgingSort/v1/hops/HopsAverageRanks?hotelId=%i&searchDate=%s" hotelId searchDatesP , headers = [ HttpRequestHeaders.BasicAuth user password ], silentHttpErrors=true)
         ExpediaRest.load (HotelId hotelId) response <| fun (HotelId hotelId) response ->
             let parsed = response |> SortRankApi.Parse
             
@@ -134,8 +135,15 @@ module CompetitorSetEventsService =
         
 
 open CompetitorSetEventsService
-CompetitorSetEventsService.load "EQC15240057test" "mVtM7Uq3" (HotelId 15240057) (StartDate (DateTime(2016,6,1))) (EndDate (DateTime(2016,6,3)))
-SortRank.load "EQC15240057test" "mVtM7Uq3" (HotelId 15240057)
+open SortRank
+
+let jun16 d = DateTime(2016,6,d,0,0,0,DateTimeKind.Utc) 
+
+CompetitorSetEventsService.load "EQC15240057test" "mVtM7Uq3" (HotelId 15240057) (jun16 1 |> StartDate) (jun16 3 |> EndDate)
+//14 -> 16
+SortRank.load "EQC15240057test" "mVtM7Uq3" (HotelId 15240057) [(14 |> jun16 |> SearchDate)]
+
 FairShareService.load "EQC15240057test" "mVtM7Uq3" (HotelId 15240057) (Day 2)
 TopPointOfSell.load "EQC15240057test" "mVtM7Uq3" (HotelId 15240057)
+TopPointOfSell.tpidMap
 ConversationCountService.load "EQC15240057test" "mVtM7Uq3" (HotelId 15240057)
