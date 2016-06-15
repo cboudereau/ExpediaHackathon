@@ -20,6 +20,8 @@ type Error = Error of HotelId * ErrorMessage
 
 type RegionId = RegionId of int64 //Gaia Id
 
+let dateString (date:DateTime) = date.ToString("yyyy-MM-dd")
+
 module ExpediaRest = 
     let load (HotelId hotelId) (response:HttpResponse) f =
         match response.StatusCode, response.Body with
@@ -55,17 +57,49 @@ module ConversationCountService =
 
 module FairShareService = 
     type FairShareServiceApi = JsonProvider<"""fairShare.sample.json""">
+    type RoomCount = RoomCount of int
+    type FairShare = FairShare of decimal
+    type BookedRoom = BookedRoom of int
+    type Date = Date of DateTime
+
+    type Daily = 
+        { BookedRooms : BookedRoom
+          CompSetBookedRooms : BookedRoom
+          Date : Date}
+
+    type FairShareData = 
+        { CompSetRoomCount : RoomCount
+          FairShare : FairShare
+          RoomCount : RoomCount
+          Daily : Daily list
+          }
 
     let load user password (HotelId hotelId) (Day day) = 
         let response = Http.Request(sprintf "https://services.expediapartnercentral.com/insights/public/v1/fairShare?hotelId=%i&dayNum=%i" hotelId day, headers = [ HttpRequestHeaders.BasicAuth user password ], silentHttpErrors=true)
 
         ExpediaRest.load (HotelId hotelId) response <| fun (HotelId hotelId) response ->
             let responseParsed = response|> FairShareServiceApi.Parse 
+
+            let daily (d:FairShareServiceApi.Daily) = 
+                { BookedRooms = BookedRoom d.BookedRooms
+                  CompSetBookedRooms = BookedRoom d.CompSetBookedRooms
+                  Date = Date d.Date }
+
+            let data (d:FairShareServiceApi.Data) =
+                { CompSetRoomCount = RoomCount d.CompSetRoomCount
+                  FairShare = FairShare d.Fairshare
+                  RoomCount = RoomCount d.RoomCount
+                  Daily = 
+                  d.Daily
+                  |> Array.map daily
+                  |> Array.toList }
             match responseParsed.ErrorCode.JsonValue.AsString(), responseParsed.ErrorMsg.JsonValue.AsString() with
-            | null, null -> responseParsed |> Success
+            | null, null -> responseParsed.Data|> data |> Success
             | errorCode, errorMsg -> Failure(Error(HotelId hotelId, ErrorMessage(sprintf "%s errorCode: %s" errorCode errorMsg)))
 
 module SortRank = 
+    type private SortRankApi = JsonProvider< """sortrank.sample.json""", SampleIsList=true >
+
     type Price = USD of decimal
     type SearchDate = SearchDate of DateTime
     type CheckinDate = CheckinDate of DateTime
@@ -85,8 +119,6 @@ module SortRank =
           SearchDate : SearchDate
           Regions : (TpId * Region) list }
 
-    type private SortRankApi = JsonProvider< """sortrank.sample.json""", SampleIsList=true >
-    
     let load user password (HotelId hotelId) searchDate = 
         //TODO : use search parameter : ?hotelId=1&searchDate=2016-05-15&checkin=2016-05-16&numDays=1
         let response = Http.Request(sprintf "https://services.expediapartnercentral.com/sort-ranks/lodgingSort/v1/hops/HopsAverageRanks?hotelId=%i&searchDate=%s" hotelId searchDate , headers = [ HttpRequestHeaders.BasicAuth user password ], silentHttpErrors=true)
@@ -120,19 +152,52 @@ module SortRank =
                 |> Success
 
 module CompetitorSetEventsService = 
+    type CompetitorSetEventsApi = JsonProvider< """competitorsetecents.sample.json""" >
     type StartDate = StartDate of DateTime
     type EndDate = EndDate of DateTime
+    type HotelName = HotelName of string
+    type Limit = Limit of int
+    type EventDate = EventDate of DateTime
 
-    let private dateToString (date:DateTime) = date.ToString("yyyy-MM-dd")
+    type CompSet = 
+        { EventDate : EventDate
+          HotelId : HotelId
+          HotelName : HotelName }
+
+    type CompetitorSetEvent = 
+        { HotelId : HotelId
+          HotelName : HotelName
+          EndDate : EndDate
+          Limit : Limit
+          StartDate : StartDate
+          CompSet : CompSet list }
         
-    type CompetitorSetEventsApi = JsonProvider< """competitorsetecents.sample.json""" >
+    let urlFormat (HotelId hotelId) (StartDate startDate) (EndDate endDate) = 
+        sprintf "https://services.expediapartnercentral.com/insights/public/v1/addCompSet?hotelId=%i&startDate=%s&endDate=%s" hotelId (dateString startDate) (dateString endDate)
     
     let load user password (HotelId hotelId) (StartDate startDate) (EndDate endDate) = 
-        let response = Http.Request(sprintf "https://services.expediapartnercentral.com/insights/public/v1/addCompSet?hotelId=%i&startDate=%s&endDate=%s" hotelId (dateToString startDate) (dateToString endDate), headers = [ HttpRequestHeaders.BasicAuth user password ], silentHttpErrors=true)
+        let response = Http.Request(urlFormat (HotelId hotelId) (StartDate startDate) (EndDate endDate), headers = [ HttpRequestHeaders.BasicAuth user password ], silentHttpErrors=true)
         ExpediaRest.load (HotelId hotelId) response <| fun (HotelId hotelId) response ->
             let responseParsed = response|> CompetitorSetEventsApi.Parse 
+
+            let compSet (cs:CompetitorSetEventsApi.CompSet)= 
+               { EventDate = EventDate cs.EventDate
+                 HotelId = HotelId cs.HotelId
+                 HotelName = HotelName cs.HotelName }
+
+            let data (d:CompetitorSetEventsApi.Data) = 
+                { HotelId = HotelId d.HotelId
+                  HotelName = HotelName d.HotelName
+                  EndDate = EndDate d.EndDate
+                  Limit = Limit d.Limit
+                  StartDate = StartDate d.StartDate
+                  CompSet = 
+                    d.CompSet 
+                    |> Array.map compSet
+                    |> Array.toList }
+
             match String.IsNullOrEmpty(responseParsed.ErrorCode.JsonValue.AsString()), String.IsNullOrEmpty(responseParsed.ErrorMsg.JsonValue.AsString()) with
-            | true, true -> responseParsed |> Success
+            | true, true -> responseParsed.Data |> data |> Success
             | errorCode, errorMsg -> Failure(Error(HotelId hotelId, ErrorMessage(sprintf "%s errorCode: %s" (responseParsed.ErrorCode.JsonValue.AsString()) (responseParsed.ErrorMsg.JsonValue.AsString()))))
         
 
@@ -151,22 +216,33 @@ let commandParser =
         let commandParser (Slack.TeamMember teamMember) (Slack.TextMessage m) = 
             match m with
             | String.Contains "What's up" _ -> 
-                let message = 
+                let countMessage = 
                     let mc = 
                         match ConversationCountService.load user password hotelId with
                         | Success (UnreadCount i) when i < 2 -> sprintf "%i unread message" i
                         | Success (UnreadCount i) -> sprintf "%i unread messages" i
                         | Failure (Error(_, ErrorMessage em)) -> sprintf "some problem %s" em
                     sprintf "Hello %s, \r\n You have %s" teamMember mc
-                post message
+                let rankMessage = 
+                    match SortRank.load user password hotelId "2016-06-14,2016-06-15" with
+                    | Success (sortRanks) -> 
+                        let datas = sortRanks |> List.collect (fun h -> h.Regions |> List.collect(fun (tpid, r) -> r.Datas))
+                        let rank r = let (Rank r) = r.AverageRank in r
+                        let min = datas |> List.minBy(fun d -> d.AverageRank) |> rank
+                        let max = datas |> List.maxBy(fun d -> d.AverageRank) |> rank
+                        sprintf "Well, I see that you have really increased your ranking from %.2f to %.2f since 2016-06-15!" max min
+                    | Failure (Error(_, ErrorMessage em)) -> sprintf "I experienced some problems (%s), one moment please..." em
+                countMessage + "\r\n" + rankMessage |> post
+            
             | String.Contains "What's my ranking today" _ ->
                 match SortRank.load user password hotelId "2016-06-15" with
                 | Success (sortRanks) -> 
                     let datas = sortRanks |> List.collect (fun h -> h.Regions |> List.collect(fun (tpid, r) -> r.Datas))
-                    let rank r = let (Rank r) = r.AverageRank in r
-                    let min = datas |> List.minBy(fun d -> d.AverageRank) |> rank
-                    sprintf "Oh...\r\nYou have a good ranking (%.1f)!\r\nGood job !\r\nMay be you want to be the first now :sunglasses:" min |> post 
+                    let rank r = let (Rank r, USD p) = r.AverageRank, r.AveragePrice in r,p
+                    let (min, p) = datas |> List.minBy(fun d -> d.AverageRank) |> rank
+                    sprintf "You have a good ranking (%.1f at $%.2f)!\r\nGood job !\r\nMay be you want to be the first now :sunglasses:" min p |> post 
                 | Failure (Error(_, ErrorMessage em)) -> sprintf "I experienced some problems (%s), one moment please..." em |> post
+            
             | String.Contains "What's my ranking yesterday" _ ->
                 match SortRank.load user password hotelId "2016-06-14" with
                 | Success (sortRanks) -> 
@@ -174,8 +250,19 @@ let commandParser =
                     let rank r = let (Rank r) = r.AverageRank in r
                     let min = datas |> List.minBy(fun d -> d.AverageRank) |> rank
                     let max = datas |> List.maxBy(fun d -> d.AverageRank) |> rank
-                    sprintf "Ok...\r\nI think you are so far between %.1f and %.1f." min max |> post 
+                    sprintf "I think you are so far between %.1f and %.1f." min max |> post 
                 | Failure (Error(_, ErrorMessage em)) -> sprintf "I experienced some problems (%s), one moment please..." em |> post
+            
+            | String.Contains "What's my best price today" _ ->
+                match SortRank.load user password hotelId "2016-06-14" with
+                | Success (sortRanks) -> 
+                    let datas = sortRanks |> List.collect (fun h -> h.Regions |> List.collect(fun (tpid, r) -> r.Datas))
+                    let price p = let (USD  pr, CheckinDate cd) = p.AveragePrice,p.CheckinDate in pr, cd
+                    let (minP, minCd) = datas |> List.minBy(fun d -> d.AveragePrice) |> price
+                    sprintf "A customer stay in your hotel with your best price $%.2f on %s" minP (dateString minCd) |> post 
+                | Failure (Error(_, ErrorMessage em)) -> sprintf "I experienced some problems (%s), one moment please..." em |> post
+             
+            
             | s -> sprintf "I don't understand : %s" s |> post
 
         return! Slack.connect (Slack.Bot "expedia") commandParser
@@ -187,6 +274,7 @@ fsi.AddPrinter(fun (x : DateTime) -> x.ToString("yyyy-MM-dd"))
 let jun16 d = DateTime(2016,6,d,0,0,0,DateTimeKind.Utc) 
 
 CompetitorSetEventsService.load "EQC15240057test" "mVtM7Uq3" (HotelId 15240057) (jun16 1 |> StartDate) (jun16 3 |> EndDate)
+
 //14 -> 16
 let sd = jun16 >> SearchDate
 let (Success r) = SortRank.load "EQC15240057test" "mVtM7Uq3" (HotelId 15240057) "2016-06-14,2016-06-16"
