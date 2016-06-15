@@ -118,7 +118,7 @@ module SortRank =
         { HotelId : HotelId
           SearchDate : SearchDate
           Regions : (TpId * Region) list }
-
+    
     let load user password (HotelId hotelId) searchDate = 
         //TODO : use search parameter : ?hotelId=1&searchDate=2016-05-15&checkin=2016-05-16&numDays=1
         let response = Http.Request(sprintf "https://services.expediapartnercentral.com/sort-ranks/lodgingSort/v1/hops/HopsAverageRanks?hotelId=%i&searchDate=%s" hotelId searchDate , headers = [ HttpRequestHeaders.BasicAuth user password ], silentHttpErrors=true)
@@ -150,6 +150,18 @@ module SortRank =
                       Regions = sd.Tpids |> Array.collect tpid |> Array.toList })
                 |> Array.toList
                 |> Success
+
+    type SortRankStat = (SearchDate * (PointOfSell * Stat))
+
+    let map f x = 
+        match x with
+        | Success x' -> f x' |> Success
+        | Failure e -> Failure e
+
+    let stat user password (HotelId hotelId) sd = 
+        let convert l : SortRankStat list =  l |> List.collect(fun s -> s.Regions |> List.collect(fun (tpid,r) -> r.Datas |> List.map(fun d -> s.SearchDate, (TopPointOfSell.tpidMap |> Map.find tpid, d))))
+        (load user password (HotelId hotelId) sd)
+        |> map convert
 
 module CompetitorSetEventsService = 
     type CompetitorSetEventsApi = JsonProvider< """competitorsetecents.sample.json""" >
