@@ -16,6 +16,8 @@ type Error = Error of HotelId * ErrorMessage
 
 type RegionId = RegionId of int64 //Gaia Id
 
+let dateString (date:DateTime) = date.ToString("yyyy-MM-dd")
+
 module ExpediaRest = 
     let load (HotelId hotelId) (response:HttpResponse) f =
         match response.StatusCode, response.Body with
@@ -51,17 +53,49 @@ module ConversationCountService =
 
 module FairShareService = 
     type FairShareServiceApi = JsonProvider<"""fairShare.sample.json""">
+    type RoomCount = RoomCount of int
+    type FairShare = FairShare of decimal
+    type BookedRoom = BookedRoom of int
+    type Date = Date of DateTime
+
+    type Daily = 
+        { BookedRooms : BookedRoom
+          CompSetBookedRooms : BookedRoom
+          Date : Date}
+
+    type FairShareData = 
+        { CompSetRoomCount : RoomCount
+          FairShare : FairShare
+          RoomCount : RoomCount
+          Daily : Daily list
+          }
 
     let load user password (HotelId hotelId) (Day day) = 
         let response = Http.Request(sprintf "https://services.expediapartnercentral.com/insights/public/v1/fairShare?hotelId=%i&dayNum=%i" hotelId day, headers = [ HttpRequestHeaders.BasicAuth user password ], silentHttpErrors=true)
 
         ExpediaRest.load (HotelId hotelId) response <| fun (HotelId hotelId) response ->
             let responseParsed = response|> FairShareServiceApi.Parse 
+
+            let daily (d:FairShareServiceApi.Daily) = 
+                { BookedRooms = BookedRoom d.BookedRooms
+                  CompSetBookedRooms = BookedRoom d.CompSetBookedRooms
+                  Date = Date d.Date }
+
+            let data (d:FairShareServiceApi.Data) =
+                { CompSetRoomCount = RoomCount d.CompSetRoomCount
+                  FairShare = FairShare d.Fairshare
+                  RoomCount = RoomCount d.RoomCount
+                  Daily = 
+                  d.Daily
+                  |> Array.map daily
+                  |> Array.toList }
             match responseParsed.ErrorCode.JsonValue.AsString(), responseParsed.ErrorMsg.JsonValue.AsString() with
-            | null, null -> responseParsed |> Success
+            | null, null -> responseParsed.Data|> data |> Success
             | errorCode, errorMsg -> Failure(Error(HotelId hotelId, ErrorMessage(sprintf "%s errorCode: %s" errorCode errorMsg)))
 
 module SortRank = 
+    type private SortRankApi = JsonProvider< """sortrank.sample.json""", SampleIsList=true >
+
     type Price = USD of decimal
     type SearchDate = SearchDate of DateTime
     type CheckinDate = CheckinDate of DateTime
@@ -80,10 +114,6 @@ module SortRank =
         { HotelId : HotelId
           SearchDate : SearchDate
           Regions : (TpId * Region) list }
-
-    type private SortRankApi = JsonProvider< """sortrank.sample.json""", SampleIsList=true >
-    
-    let dateString (date:DateTime) = date.ToString("yyyy-MM-dd")
         
     let load user password (HotelId hotelId) searchDates = 
         //TODO : use search parameter : ?hotelId=1&searchDate=2016-05-15&checkin=2016-05-16&numDays=1
@@ -118,19 +148,52 @@ module SortRank =
                 |> Success
 
 module CompetitorSetEventsService = 
+    type CompetitorSetEventsApi = JsonProvider< """competitorsetecents.sample.json""" >
     type StartDate = StartDate of DateTime
     type EndDate = EndDate of DateTime
+    type HotelName = HotelName of string
+    type Limit = Limit of int
+    type EventDate = EventDate of DateTime
 
-    let private dateToString (date:DateTime) = date.ToString("yyyy-MM-dd")
-        
-    type CompetitorSetEventsApi = JsonProvider< """competitorsetecents.sample.json""" >
-    
+    type CompSet = 
+        { EventDate : EventDate
+          HotelId : HotelId
+          HotelName : HotelName }
+
+    type CompetitorSetEvent = 
+        { HotelId : HotelId
+          HotelName : HotelName
+          EndDate : EndDate
+          Limit : Limit
+          StartDate : StartDate
+          CompSet : CompSet list }
+
+    let urlFormat (HotelId hotelId) (StartDate startDate) (EndDate endDate) = 
+        sprintf "https://services.expediapartnercentral.com/insights/public/v1/addCompSet?hotelId=%i&startDate=%s&endDate=%s" hotelId (dateString startDate) (dateString endDate)
+
     let load user password (HotelId hotelId) (StartDate startDate) (EndDate endDate) = 
-        let response = Http.Request(sprintf "https://services.expediapartnercentral.com/insights/public/v1/addCompSet?hotelId=%i&startDate=%s&endDate=%s" hotelId (dateToString startDate) (dateToString endDate), headers = [ HttpRequestHeaders.BasicAuth user password ], silentHttpErrors=true)
+        let response = Http.Request(urlFormat (HotelId hotelId) (StartDate startDate) (EndDate endDate), headers = [ HttpRequestHeaders.BasicAuth user password ], silentHttpErrors=true)
         ExpediaRest.load (HotelId hotelId) response <| fun (HotelId hotelId) response ->
             let responseParsed = response|> CompetitorSetEventsApi.Parse 
+
+            let compSet (cs:CompetitorSetEventsApi.CompSet)= 
+               { EventDate = EventDate cs.EventDate
+                 HotelId = HotelId cs.HotelId
+                 HotelName = HotelName cs.HotelName }
+
+            let data (d:CompetitorSetEventsApi.Data) = 
+                { HotelId = HotelId d.HotelId
+                  HotelName = HotelName d.HotelName
+                  EndDate = EndDate d.EndDate
+                  Limit = Limit d.Limit
+                  StartDate = StartDate d.StartDate
+                  CompSet = 
+                    d.CompSet 
+                    |> Array.map compSet
+                    |> Array.toList }
+
             match String.IsNullOrEmpty(responseParsed.ErrorCode.JsonValue.AsString()), String.IsNullOrEmpty(responseParsed.ErrorMsg.JsonValue.AsString()) with
-            | true, true -> responseParsed |> Success
+            | true, true -> responseParsed.Data |> data |> Success
             | errorCode, errorMsg -> Failure(Error(HotelId hotelId, ErrorMessage(sprintf "%s errorCode: %s" (responseParsed.ErrorCode.JsonValue.AsString()) (responseParsed.ErrorMsg.JsonValue.AsString()))))
         
 

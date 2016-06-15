@@ -1,1 +1,1 @@
-﻿{"status":"Success","errorCode":null,"errorMsg":null,"data":{"roomCount":0,"compSetRoomCount":268,"fairshare":0,"daily":[{"date":"2016-06-14","bookedRooms":0,"compSetBookedRooms":14},{"date":"2016-06-15","bookedRooms":0,"compSetBookedRooms":16}]}}
+﻿{"status":"Success","errorCode":null,"errorMsg":null,"data":{"roomCount":0,"compSetRoomCount":268,"fairshare":0.7,"daily":[{"date":"2016-06-14","bookedRooms":0,"compSetBookedRooms":14},{"date":"2016-06-15","bookedRooms":0,"compSetBookedRooms":16}]}}
