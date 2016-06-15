@@ -1,5 +1,8 @@
 ﻿#r """..\packages\FSharp.Data.2.3.0\lib\net40\FSharp.Data.dll"""
 
+#load "String.fs"
+#load "Slack.fs"
+
 open FSharp.Data
 open System
 
@@ -66,9 +69,9 @@ module SortRank =
     type Price = USD of decimal
     type SearchDate = SearchDate of DateTime
     type CheckinDate = CheckinDate of DateTime
-    
+    type Rank = Rank of decimal
     type Stat = 
-        { AverageRank : Price //Average sort rank (for all searches done on the specified search date for the specified checkin date on the specified TPID and region).
+        { AverageRank : Rank //Average sort rank (for all searches done on the specified search date for the specified checkin date on the specified TPID and region).
           AveragePrice : Price //Average price is returned in USD.
           AverageCompensation : Price //Average compensation is returned in USD. TODO : question, because I don't know what it is ?
           CheckinDate : CheckinDate }
@@ -84,17 +87,14 @@ module SortRank =
 
     type private SortRankApi = JsonProvider< """sortrank.sample.json""", SampleIsList=true >
     
-    let dateString (date:DateTime) = date.ToString("yyyy-MM-dd")
-        
-    let load user password (HotelId hotelId) searchDates = 
+    let load user password (HotelId hotelId) searchDate = 
         //TODO : use search parameter : ?hotelId=1&searchDate=2016-05-15&checkin=2016-05-16&numDays=1
-        let searchDatesP = String.Join(",",searchDates |> List.map (fun (SearchDate d) -> dateString d) |> List.toArray)
-        let response = Http.Request(sprintf "https://services.expediapartnercentral.com/sort-ranks/lodgingSort/v1/hops/HopsAverageRanks?hotelId=%i&searchDate=%s" hotelId searchDatesP , headers = [ HttpRequestHeaders.BasicAuth user password ], silentHttpErrors=true)
+        let response = Http.Request(sprintf "https://services.expediapartnercentral.com/sort-ranks/lodgingSort/v1/hops/HopsAverageRanks?hotelId=%i&searchDate=%s" hotelId searchDate , headers = [ HttpRequestHeaders.BasicAuth user password ], silentHttpErrors=true)
         ExpediaRest.load (HotelId hotelId) response <| fun (HotelId hotelId) response ->
             let parsed = response |> SortRankApi.Parse
             
             let data (d:SortRankApi.Datum) = 
-                { AverageRank = d.AvgRank |> USD
+                { AverageRank = d.AvgRank |> Rank
                   AveragePrice = d.AvgPrice |> USD
                   AverageCompensation = d.AvgComp |> USD
                   CheckinDate = CheckinDate d.CheckinDate }
@@ -116,6 +116,7 @@ module SortRank =
                     { HotelId = HotelId hotelId
                       SearchDate = SearchDate sd.SearchDate
                       Regions = sd.Tpids |> Array.collect tpid |> Array.toList })
+                |> Array.toList
                 |> Success
 
 module CompetitorSetEventsService = 
@@ -138,13 +139,61 @@ module CompetitorSetEventsService =
 open CompetitorSetEventsService
 open SortRank
 
+let post = Slack.post (Slack.Channel "advise")
+let user = "EQC15240057test"
+let password = "mVtM7Uq3"
+let hotelId = HotelId 15240057
+
+open ConversationCountService
+
+let commandParser = 
+    async {
+        let commandParser (Slack.TeamMember teamMember) (Slack.TextMessage m) = 
+            match m with
+            | String.Contains "What's up" _ -> 
+                let message = 
+                    let mc = 
+                        match ConversationCountService.load user password hotelId with
+                        | Success (UnreadCount i) when i < 2 -> sprintf "%i unread message" i
+                        | Success (UnreadCount i) -> sprintf "%i unread messages" i
+                        | Failure (Error(_, ErrorMessage em)) -> sprintf "some problem %s" em
+                    sprintf "Hello %s, \r\n You have %s" teamMember mc
+                post message
+            | String.Contains "What's my ranking today" _ ->
+                match SortRank.load user password hotelId "2016-06-15" with
+                | Success (sortRanks) -> 
+                    let datas = sortRanks |> List.collect (fun h -> h.Regions |> List.collect(fun (tpid, r) -> r.Datas))
+                    let rank r = let (Rank r) = r.AverageRank in r
+                    let min = datas |> List.minBy(fun d -> d.AverageRank) |> rank
+                    sprintf "Oh...\r\nYou have a good ranking (%.1f)!\r\nGood job !\r\nMay be you want to be the first now :sunglasses:" min |> post 
+                | Failure (Error(_, ErrorMessage em)) -> sprintf "I experienced some problems (%s), one moment please..." em |> post
+            | String.Contains "What's my ranking yesterday" _ ->
+                match SortRank.load user password hotelId "2016-06-14" with
+                | Success (sortRanks) -> 
+                    let datas = sortRanks |> List.collect (fun h -> h.Regions |> List.collect(fun (tpid, r) -> r.Datas))
+                    let rank r = let (Rank r) = r.AverageRank in r
+                    let min = datas |> List.minBy(fun d -> d.AverageRank) |> rank
+                    let max = datas |> List.maxBy(fun d -> d.AverageRank) |> rank
+                    sprintf "Ok...\r\nI think you are so far between %.1f and %.1f." min max |> post 
+                | Failure (Error(_, ErrorMessage em)) -> sprintf "I experienced some problems (%s), one moment please..." em |> post
+            | s -> sprintf "I don't understand : %s" s |> post
+
+        return! Slack.connect (Slack.Bot "expedia") commandParser
+    }
+
+commandParser |> Async.RunSynchronously
+
+fsi.AddPrinter(fun (x : DateTime) -> x.ToString("yyyy-MM-dd"))
 let jun16 d = DateTime(2016,6,d,0,0,0,DateTimeKind.Utc) 
 
 CompetitorSetEventsService.load "EQC15240057test" "mVtM7Uq3" (HotelId 15240057) (jun16 1 |> StartDate) (jun16 3 |> EndDate)
 //14 -> 16
-SortRank.load "EQC15240057test" "mVtM7Uq3" (HotelId 15240057) [(14 |> jun16 |> SearchDate)]
+let sd = jun16 >> SearchDate
+let (Success r) = SortRank.load "EQC15240057test" "mVtM7Uq3" (HotelId 15240057) "2016-06-14,2016-06-16"
+let datas = r |> List.collect (fun h -> h.Regions |> List.collect(fun (tpid, r) -> r.Datas))
+datas |> List.minBy(fun d -> d.AverageRank)
+datas |> List.maxBy(fun d -> d.AverageRank)
 
 FairShareService.load "EQC15240057test" "mVtM7Uq3" (HotelId 15240057) (Day 2)
 TopPointOfSell.load "EQC15240057test" "mVtM7Uq3" (HotelId 15240057)
 TopPointOfSell.tpidMap
-ConversationCountService.load "EQC15240057test" "mVtM7Uq3" (HotelId 15240057)
