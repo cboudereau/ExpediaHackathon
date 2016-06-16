@@ -303,7 +303,7 @@ let commandParser =
                     sprintf "So far, you should be between %.1f and %.1f." min max |> post 
                 | Failure (Error(_, ErrorMessage em)) -> sprintf "I experienced some problems (%s), one moment please..." em |> post
             
-            | String.Contains "What' my best price today" _ ->
+            | String.Contains "What's my best price today" _ ->
                 match SortRank.load user password hotelId "2016-06-14" with
                 | Success (sortRanks) -> 
                     let datas = sortRanks |> List.collect (fun h -> h.Regions |> List.collect(fun (tpid, r) -> r.Datas |> List.map (fun d -> tpid, d)))
