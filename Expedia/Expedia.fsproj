@@ -56,7 +56,6 @@
   <Import Project="$(FSharpTargetsPath)" />
   <ItemGroup>
     <Compile Include="String.fs" />
-    <Compile Include="Statsd.fs" />
     <None Include="rtmStart.sample.json" />
     <None Include="rtmMessage.sample.json" />
     <Compile Include="Slack.fs" />
@@ -67,8 +66,6 @@
     <None Include="competitorsetecents.sample.json" />
     <None Include="fairShare.sample.json" />
     <None Include="Clem.fsx" />
-    <None Include="Product.fsx" />
-    <None Include="productProperties.sample.json" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="FSharp.Data">

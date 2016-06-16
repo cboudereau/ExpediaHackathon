@@ -15,6 +15,8 @@ let map f x =
     | Success x' -> f x' |> Success
     | Failure e -> Failure e
 
+let bind f = function Success x' -> f x' | Failure e -> Failure e
+
 type HotelId = HotelId of int
 type TpId = TpId of int
 type PointOfSell = PointOfSell of string
@@ -156,30 +158,46 @@ module SortRank =
                 |> Array.toList
                 |> Success
 
-    type SortRankStat = (SearchDate * (PointOfSell * Stat))    
+    type SortRankStat = (CheckinDate * (PointOfSell * Stat))    
 
     let stat user password (HotelId hotelId) sd = 
-        let convert l : SortRankStat list =  l |> List.collect(fun s -> s.Regions |> List.collect(fun (tpid,r) -> r.Datas |> List.map(fun d -> s.SearchDate, (TopPointOfSell.tpidMap |> Map.find tpid, d))))
+        let convert l : SortRankStat list =  l |> List.collect(fun s -> s.Regions |> List.collect(fun (tpid,r) -> r.Datas |> List.map(fun d -> d.CheckinDate, (TopPointOfSell.tpidMap |> Map.find tpid, d))))
         (load user password (HotelId hotelId) sd)
         |> map convert
 
 module InfluxDb =
     open SortRank
+    
+    let private epoch = DateTime(1970,1,1,0,0,0,DateTimeKind.Utc)
+    let private timestamp d = (d - epoch).TotalMilliseconds |> int64 |> sprintf "%i000000"
+    
+//    timestamp DateTime.UtcNow
+        
     let formatStat (srl:SortRankStat list) = 
+        printfn "%A" srl
+        
         let value = 
             srl
             |> List.toArray
-            |> Array.collect(fun (x, (PointOfSell y, z)) -> 
+            |> Array.collect(fun (CheckinDate sd, (PointOfSell y, z)) -> 
                 let (Rank rank) = z.AverageRank
                 let (USD price) = z.AveragePrice
                 let (USD comp) = z.AverageCompensation
-                [|sprintf "rank,pointofsell='%s' value=%.2f" y rank
-                  sprintf "price,pointofsell='%s' value=%.2f" y price
-                  sprintf "comp,pointofsell='%s' value=%.2f" y comp|])
-        String.Join("\r\n", value)
+                let ts = timestamp sd 
+                [|sprintf "rank,pointofsell='%s' value=%.2f %s" y rank ts
+                  sprintf "price,pointofsell='%s' value=%.2f %s" y price ts
+                  sprintf "comp,pointofsell='%s' value=%.2f %s" y comp ts|])
+        
+        let r = String.Join("\n", value)
+        printfn "%s" r
+        r
 
     let send data =
-        Http.Request("http://localhost:8086", httpMethod = HttpMethod.Post, body = HttpRequestBody.TextRequest data, silentHttpErrors = true) |> ignore
+        let response = Http.Request("http://localhost:8086/write?db=expedia", httpMethod = HttpMethod.Post, body = HttpRequestBody.TextRequest data, silentHttpErrors = true)
+        match response.StatusCode, response.Body with
+        | 204, _ -> Success ()
+        | other, HttpResponseBody.Text r -> Error (HotelId 0, ErrorMessage (sprintf "%i : %s" other r)) |> Failure
+        | other, HttpResponseBody.Binary _ -> Error (HotelId 0, ErrorMessage(sprintf "%i : binary failed" other)) |> Failure
 
 module CompetitorSetEventsService = 
     type CompetitorSetEventsApi = JsonProvider< """competitorsetecents.sample.json""" >
@@ -239,9 +257,7 @@ let user = "EQC15240057test"
 let password = "mVtM7Uq3"
 let hotelId = HotelId 15240057
 
-let sendData  user password hotelId sd = 
-    SortRank.stat user password hotelId sd 
-    |> map (InfluxDb.formatStat >> InfluxDb.send)
+let sendData user password hotelId sd = SortRank.stat user password hotelId sd |> map InfluxDb.formatStat |> bind InfluxDb.send
 
 open ConversationCountService
 
@@ -296,30 +312,26 @@ let commandParser =
                     let (PointOfSell pointOfSale) = TopPointOfSell.tpidMap |> Map.find tpid
                     sprintf "A customer stayed in your hotel with for $%.2f on %s from %s point of sell." minP (dateString minCd) pointOfSale |> post 
                 | Failure (Error(_, ErrorMessage em)) -> sprintf "I experienced some problems (%s), one moment please..." em |> post
-             
+
+//<https://availpro.atlassian.net/wiki/display/RDKB/NextRate+Missing+Recommendations|missing this recommandations>             
             
             | s -> sprintf "I don't understand : %s" s |> post
 
         return! Slack.connect (Slack.Bot "expedia") commandParser
     }
 
-//commandParser |> Async.RunSynchronously
+commandParser |> Async.RunSynchronously
 
 fsi.AddPrinter(fun (x : DateTime) -> x.ToString("yyyy-MM-dd"))
 let jun16 d = DateTime(2016,6,d,0,0,0,DateTimeKind.Utc) 
 
-CompetitorSetEventsService.load "EQC15240057test" "mVtM7Uq3" (HotelId 15240057) (jun16 1 |> StartDate) (jun16 3 |> EndDate)
 
 //14 -> 16
-let sd = jun16 >> SearchDate
-let sDate d = dateString (jun16 d) 
-let (Success r) = SortRank.load "EQC15240057test" "mVtM7Uq3" (HotelId 15240057) "2016-06-14,2016-06-16"
-let datas = r |> List.collect (fun h -> h.Regions |> List.collect(fun (tpid, r) -> r.Datas))
-datas |> List.minBy(fun d -> d.AverageRank)
-datas |> List.maxBy(fun d -> d.AverageRank)
+let sd d = dateString (jun16 d) 
 
-sendData user password hotelId (sDate 14)
+sendData user password hotelId "2016-06-14,2016-06-15"
 
+CompetitorSetEventsService.load "EQC15240057test" "mVtM7Uq3" (HotelId 15240057) (jun16 1 |> StartDate) (jun16 3 |> EndDate)
 FairShareService.load "EQC15240057test" "mVtM7Uq3" (HotelId 15240057) (Day 2)
 TopPointOfSell.load "EQC15240057test" "mVtM7Uq3" (HotelId 15240057)
 TopPointOfSell.tpidMap
