@@ -239,9 +239,7 @@ let user = "EQC15240057test"
 let password = "mVtM7Uq3"
 let hotelId = HotelId 15240057
 
-let sendData  user password hotelId sd = 
-    SortRank.stat user password hotelId sd 
-    |> map (InfluxDb.formatStat >> InfluxDb.send)
+let sendData  user password hotelId sd = SortRank.stat user password hotelId sd |> map (InfluxDb.formatStat >> InfluxDb.send)
 
 open ConversationCountService
 
