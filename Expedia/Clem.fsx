@@ -256,7 +256,7 @@ let commandParser =
                         | Success (UnreadCount i) when i < 2 -> sprintf "%i unread message" i
                         | Success (UnreadCount i) -> sprintf "%i unread messages" i
                         | Failure (Error(_, ErrorMessage em)) -> sprintf "some problem %s" em
-                    sprintf "Hello %s, \r\n You have %s" teamMember mc
+                    sprintf "Hello %s, \r\n you have %s" teamMember mc
                 let rankMessage = 
                     match SortRank.load user password hotelId "2016-06-14,2016-06-15" with
                     | Success (sortRanks) -> 
@@ -274,27 +274,27 @@ let commandParser =
                     let datas = sortRanks |> List.collect (fun h -> h.Regions |> List.collect(fun (tpid, r) -> r.Datas))
                     let rank r = let (Rank r, USD p) = r.AverageRank, r.AveragePrice in r,p
                     let (min, p) = datas |> List.minBy(fun d -> d.AverageRank) |> rank
-                    sprintf "You have a good ranking (%.1f at $%.2f)!\r\nGood job !\r\nMay be you want to be the first now :sunglasses:" min p |> post 
+                    sprintf "You have a good ranking (%.1f at $%.2f)!\r\nGood job!\r\nWhat do you think about being first? :sunglasses:" min p |> post 
                 | Failure (Error(_, ErrorMessage em)) -> sprintf "I experienced some problems (%s), one moment please..." em |> post
             
-            | String.Contains "What's my ranking yesterday" _ ->
+            | String.Contains "What was my ranking yesterday" _ ->
                 match SortRank.load user password hotelId "2016-06-14" with
                 | Success (sortRanks) -> 
                     let datas = sortRanks |> List.collect (fun h -> h.Regions |> List.collect(fun (tpid, r) -> r.Datas))
                     let rank r = let (Rank r) = r.AverageRank in r
                     let min = datas |> List.minBy(fun d -> d.AverageRank) |> rank
                     let max = datas |> List.maxBy(fun d -> d.AverageRank) |> rank
-                    sprintf "I think you are so far between %.1f and %.1f." min max |> post 
+                    sprintf "So far, you should be between %.1f and %.1f." min max |> post 
                 | Failure (Error(_, ErrorMessage em)) -> sprintf "I experienced some problems (%s), one moment please..." em |> post
             
-            | String.Contains "What's my best price today" _ ->
+            | String.Contains "What' my best price today" _ ->
                 match SortRank.load user password hotelId "2016-06-14" with
                 | Success (sortRanks) -> 
                     let datas = sortRanks |> List.collect (fun h -> h.Regions |> List.collect(fun (tpid, r) -> r.Datas |> List.map (fun d -> tpid, d)))
                     let price (tpid, p) = let (USD  pr, CheckinDate cd) = p.AveragePrice,p.CheckinDate in pr, cd, tpid
                     let (minP, minCd, tpid) = datas |> List.minBy(fun (_,d) -> d.AveragePrice) |> price
                     let (PointOfSell pointOfSale) = TopPointOfSell.tpidMap |> Map.find tpid
-                    sprintf "A customer stay in your hotel with your best price $%.2f on %s from %s point of sell." minP (dateString minCd) pointOfSale |> post 
+                    sprintf "A customer stayed in your hotel with for $%.2f on %s from %s point of sell." minP (dateString minCd) pointOfSale |> post 
                 | Failure (Error(_, ErrorMessage em)) -> sprintf "I experienced some problems (%s), one moment please..." em |> post
              
             
