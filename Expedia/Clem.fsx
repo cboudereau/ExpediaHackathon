@@ -10,6 +10,11 @@ type Result<'t, 'f> =
     | Success of 't
     | Failure of 'f
 
+let map f x = 
+    match x with
+    | Success x' -> f x' |> Success
+    | Failure e -> Failure e
+
 type HotelId = HotelId of int
 type TpId = TpId of int
 type PointOfSell = PointOfSell of string
@@ -151,17 +156,30 @@ module SortRank =
                 |> Array.toList
                 |> Success
 
-    type SortRankStat = (SearchDate * (PointOfSell * Stat))
-
-    let map f x = 
-        match x with
-        | Success x' -> f x' |> Success
-        | Failure e -> Failure e
+    type SortRankStat = (SearchDate * (PointOfSell * Stat))    
 
     let stat user password (HotelId hotelId) sd = 
         let convert l : SortRankStat list =  l |> List.collect(fun s -> s.Regions |> List.collect(fun (tpid,r) -> r.Datas |> List.map(fun d -> s.SearchDate, (TopPointOfSell.tpidMap |> Map.find tpid, d))))
         (load user password (HotelId hotelId) sd)
         |> map convert
+
+module InfluxDb =
+    open SortRank
+    let formatStat (srl:SortRankStat list) = 
+        let value = 
+            srl
+            |> List.toArray
+            |> Array.collect(fun (x, (PointOfSell y, z)) -> 
+                let (Rank rank) = z.AverageRank
+                let (USD price) = z.AveragePrice
+                let (USD comp) = z.AverageCompensation
+                [|sprintf "rank,pointofsell='%s' value=%.2f" y rank
+                  sprintf "price,pointofsell='%s' value=%.2f" y price
+                  sprintf "comp,pointofsell='%s' value=%.2f" y comp|])
+        String.Join("\r\n", value)
+
+    let send data =
+        Http.Request("http://localhost:8086", httpMethod = HttpMethod.Post, body = HttpRequestBody.TextRequest data, silentHttpErrors = true) |> ignore
 
 module CompetitorSetEventsService = 
     type CompetitorSetEventsApi = JsonProvider< """competitorsetecents.sample.json""" >
@@ -220,6 +238,10 @@ let post = Slack.post (Slack.Channel "advise")
 let user = "EQC15240057test"
 let password = "mVtM7Uq3"
 let hotelId = HotelId 15240057
+
+let sendData  user password hotelId sd = 
+    SortRank.stat user password hotelId sd 
+    |> map (InfluxDb.formatStat >> InfluxDb.send)
 
 open ConversationCountService
 
@@ -281,7 +303,7 @@ let commandParser =
         return! Slack.connect (Slack.Bot "expedia") commandParser
     }
 
-commandParser |> Async.RunSynchronously
+//commandParser |> Async.RunSynchronously
 
 fsi.AddPrinter(fun (x : DateTime) -> x.ToString("yyyy-MM-dd"))
 let jun16 d = DateTime(2016,6,d,0,0,0,DateTimeKind.Utc) 
@@ -290,10 +312,13 @@ CompetitorSetEventsService.load "EQC15240057test" "mVtM7Uq3" (HotelId 15240057) 
 
 //14 -> 16
 let sd = jun16 >> SearchDate
+let sDate d = dateString (jun16 d) 
 let (Success r) = SortRank.load "EQC15240057test" "mVtM7Uq3" (HotelId 15240057) "2016-06-14,2016-06-16"
 let datas = r |> List.collect (fun h -> h.Regions |> List.collect(fun (tpid, r) -> r.Datas))
 datas |> List.minBy(fun d -> d.AverageRank)
 datas |> List.maxBy(fun d -> d.AverageRank)
+
+sendData user password hotelId (sDate 14)
 
 FairShareService.load "EQC15240057test" "mVtM7Uq3" (HotelId 15240057) (Day 2)
 TopPointOfSell.load "EQC15240057test" "mVtM7Uq3" (HotelId 15240057)

@@ -67,10 +67,12 @@
     <None Include="competitorsetecents.sample.json" />
     <None Include="fairShare.sample.json" />
     <None Include="Clem.fsx" />
+    <None Include="Product.fsx" />
+    <None Include="productProperties.sample.json" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="FSharp.Data">
-      <HintPath>..\..\..\..\..\..\packages\FSharp.Data\lib\net40\FSharp.Data.dll</HintPath>
+      <HintPath>..\packages\FSharp.Data.2.3.0\lib\net40\FSharp.Data.dll</HintPath>
     </Reference>
     <Reference Include="mscorlib" />
     <Reference Include="FSharp.Core, Version=$(TargetFSharpCoreVersion), Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
