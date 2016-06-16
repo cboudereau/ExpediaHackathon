@@ -41,7 +41,7 @@ let private findBotId (Bot bot) =
 let private tryFindUserId (Email email) = 
     rtmStart.Users
     |> Array.filter(fun u -> u.Profile.Email = Some email)
-    |> Seq.tryHead
+    |> Array.tryHead
     |> Option.map(fun u -> SlackUserId u.Id)
 
 let invite channel email =
