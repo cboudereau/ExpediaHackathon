@@ -14,7 +14,7 @@ type private SlackUserId = SlackUserId of string
 type private RtmStart = JsonProvider<"rtmStart.sample.json">
 type private RtmMessage = JsonProvider<"rtmMessage.sample.json", SampleIsList=true>
 
-let [<Literal>] private token = "todo"
+let [<Literal>] private token = "xoxb-51086347636-RGlDptt6TSepmXMO60t0UB42"
 
 let post (Channel channel) text = 
         Http.Request(
@@ -27,6 +27,67 @@ let post (Channel channel) text =
                   ("as_user", "true")
                   ("link_names", "1") ]))
         |> ignore
+
+let postImage (Channel channel) text imgUrl = 
+        Http.Request(
+            "https://slack.com/api/chat.postMessage", 
+            httpMethod = HttpMethod.Post,
+              body=
+                HttpRequestBody.TextRequest("""
+                {
+                "attachments": [
+                    {
+                        "fallback": "Required plain-text summary of the attachment.",
+                        "color": "#36a64f",
+                        "pretext": "Optional text that appears above the attachment block",
+                        "author_name": "Bobby Tables",
+                        "author_link": "http://flickr.com/bobby/",
+                        "author_icon": "http://flickr.com/icons/bobby.jpg",
+                        "title": "Slack API Documentation",
+                        "title_link": "https://api.slack.com/",
+                        "text": "Optional text that appears within the attachment",
+                        "fields": [
+                            {
+                                "title": "Priority",
+                                "value": "High",
+                                "short": false
+                            }
+                        ],
+                        "image_url": "http://my-website.com/path/to/image.jpg",
+                        "thumb_url": "http://example.com/path/to/thumb.png",
+                        "footer": "Slack API",
+                        "footer_icon": "https://platform.slack-edge.com/img/default_application_icon.png",
+                        "ts": 123456789
+                    }
+                ]
+            }"""))
+
+//            body = 
+//                HttpRequestBody.TextRequest(sprintf """
+//{
+//    "token": %s,
+//    "channel": %s,
+//    "attachments" : [
+//        {
+//            "image_url": %s
+//            "text": %s
+//        } 
+//    ]
+//}                
+//                """ token channel text imgUrl))
+            
+//            body = FormValues(
+//                [ ("token", token)
+//                  ("channel", channel)
+//                  ("text", sprintf """{ "attachments": [ { "image_url": %s,"text": %s } ] }""" imgUrl text)
+////                  ("text", text)
+//                  ("as_user", "true")
+//                  ("link_names", "1") ]))
+        |> ignore
+
+postImage (Channel "advise") "hello" "https://www.google.cz/images/branding/googlelogo/2x/googlelogo_color_272x92dp.png"
+
+post (Channel "advise") "hello"
 
 let private rtmStart = Http.RequestString("https://slack.com/api/rtm.start", query=["token", token], httpMethod="GET") |> RtmStart.Parse
 
