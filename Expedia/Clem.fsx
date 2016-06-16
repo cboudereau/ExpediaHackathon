@@ -313,7 +313,7 @@ let commandParser =
                     sprintf "A customer stay in your hotel with your best price $%.2f on %s from %s point of sell." minP (dateString minCd) pointOfSale |> post 
                 | Failure (Error(_, ErrorMessage em)) -> sprintf "I experienced some problems (%s), one moment please..." em |> post
 
-//<https://availpro.atlassian.net/wiki/display/RDKB/NextRate+Missing+Recommendations|missing this recommandations>             
+//<http://localhost:3000/dashboard/db/expedia-dashboard?panelId=1&fullscreen&from=1465981483479&to=1473515268932|click here to see your graph>             
             
             | s -> sprintf "I don't understand : %s" s |> post
 
